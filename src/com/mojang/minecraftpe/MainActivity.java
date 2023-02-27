@@ -2008,10 +2008,39 @@ public class MainActivity extends NativeActivity {
 			Field natfield = Utils.getDeclaredFieldRecursive(pathListClass,
 					"nativeLibraryDirectories");
 			natfield.setAccessible(true);
-			File[] fileList = (File[]) natfield.get(pathListObj);
-			File[] newList = addToFileList(fileList, new File(path));
-			if (fileList != newList)
-				natfield.set(pathListObj, newList);
+			Object theFileList = natfield.get(pathListObj);
+			if (theFileList instanceof File[]) {
+					File[] fileList = (File[]) theFileList;
+					File[] newList = addToFileList(fileList, new File(path));
+					if (fileList != newList)
+							natfield.set(pathListObj, newList);
+			}
+			Field natElemsField = Utils.getDeclaredFieldRecursive(pathListClass,
+							"nativeLibraryPathElements");
+			if (natElemsField != null && classLoader instanceof BaseDexClassLoader &&
+					((BaseDexClassLoader) classLoader).findLibrary("minecraftpe") == null) {
+					// Android 6.0 and above; needed on N
+					natElemsField.setAccessible(true);
+					Object[] theObjects = (Object[]) natElemsField.get(pathListObj);
+					Class<? extends Object> elemClass = theObjects.getClass().getComponentType();
+					Object newObject = null;
+					try {
+						Constructor<? extends Object> elemConstructor =
+							elemClass.getConstructor(File.class, Boolean.TYPE, File.class, dalvik.system.DexFile.class)
+						elemConstructor.setAccessible(true);
+						newObject = elemConstructor.newInstance(new File(path), true, null, null);
+					} catch (NoSuchMethodException nsm) {
+						// Android 8.0 uses a different signature.
+						Constructor<? extends Object> elemConstructor =
+							elemClass.getConstructor(File.class);
+						elemConstructor.setAccessible(true);
+						newObject = elemConstructor.newInstance(new File(path));
+					}
+					Object[] newObjects = Arrays.copyOf(theObjects, theObjects.length  1);
+					newObjects[newObjects.length - 1] = newObject;
+					System.out.println(newObjects);
+					natElemsField.set(pathListObj, newObjects);
+			}
 			// check
 			// System.out.println("Class loader shenanigans: " +
 			// ((PathClassLoader) getClassLoader()).findLibrary("minecraftpe"));
